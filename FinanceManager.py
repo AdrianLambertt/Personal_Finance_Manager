@@ -1,6 +1,6 @@
 import pandas as pd
 import gspread
-import decimal as d
+from gspread_dataframe import set_with_dataframe
 
 
 #Data formatting for the dataframe to remove
@@ -28,11 +28,35 @@ def totalPerCompany(df):
     return payCompanies
 
 
-#TODO finish this function for sheets output
-#This function will combine the data pulled from the CSV to create a Dataframe ready for the sheets API.
-def createGSheets(totalCompany, totalExpense, TotalGain, startingBalance, endingBalance):
-    formatDF = pd.DataFrame.from_dict(totalCompany, orient='index', columns=['Total Paid']).reset_index().sort_values(by='Total Paid', ascending=False)
-    formatDF.columns = ['Company', 'Total Paid']
+
+#Combines the data pulled from the CSV to create Dataframes ready for the sheets API.
+def createGSheets(totalCompany, totalExpense, totalGain, startingBalance, endingBalance):
+    companyDF = pd.DataFrame.from_dict(totalCompany, orient='index', columns=['Total Paid out']).reset_index().sort_values(by='Total Paid out', ascending=False)
+    companyDF.columns = ['Company', 'Total Paid out']
+
+    infoDF = pd.DataFrame({"Starting Balance" : startingBalance, "Ending Balance": endingBalance, "Total Paid in": totalGain, "Total Paid out": totalExpense}, index=[0])
+    return infoDF, companyDF
+
+
+#verifies and Connects to Google Sheets then updates the Spreadsheet 
+def setGSheets(infoDF, companyDF):
+    try:
+        sa = gspread.service_account()
+    except:
+        RuntimeError("Service account file unaccesible")
+
+    try:
+        sh = sa.open("Finance Manager")
+    except:
+        RuntimeError("Error connecting to Google Sheets")
+
+
+    wks = sh.worksheet("Sheet1")
+    wks.clear()
+
+    next_row = (len(infoDF.index) +4)
+    set_with_dataframe(wks, infoDF, include_index=False, include_column_header=True, row=1, col=1)
+    set_with_dataframe(wks, companyDF, include_index=False, include_column_header=True, row=next_row, col=1)
 
 
 def main():
@@ -47,11 +71,8 @@ def main():
     endingBalance = df["Balance"].iloc[-1]
 
     print("Data sucessfully formatted from CSV! \n")
-    sheetsDF = createGSheets(totalCompany, totalExpense, totalGain, startingBalance, endingBalance)
-
-    #sa = gspread.service_account()
-    #sh = sa.open("Finance Manager")
-
+    infoDF, companyDF = createGSheets(totalCompany, totalExpense, totalGain, startingBalance, endingBalance)
+    setGSheets(infoDF, companyDF)
 
 if __name__ == "__main__":
     main()
